@@ -1,0 +1,47 @@
+[tool.poetry]
+name = "report-builder-backend"
+version = "0.1.0"
+description = "Backend for AI-Led Collaborative Report Generator"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+packages = [{include = "app"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.104.0"
+uvicorn = "^0.23.2"
+sqlalchemy = "^2.0.22"
+alembic = "^1.12.0"
+pydantic = "^2.4.2"
+pydantic-settings = "^2.0.3"
+python-multipart = "^0.0.6"
+python-dotenv = "^1.0.0"
+httpx = "^0.25.0"
+weasyprint = "^60.1"
+jinja2 = "^3.1.2"
+mem0ai = "^0.1.97"
+tavily-python = "^0.7.2"
+python-docx = "^1.1.2"
+pypdf2 = "^3.0.1"
+rich = "^14.0.0"
+anthropic = "^0.18.0" # Updated to fully support messages API for Claude-3 models
+
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.2"
+black = "^23.10.0"
+isort = "^5.12.0"
+flake8 = "^6.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.isort]
+profile = "black"
+line_length = 88
