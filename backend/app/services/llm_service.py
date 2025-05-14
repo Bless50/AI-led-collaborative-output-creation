@@ -18,7 +18,7 @@ the 'llm' package. See app/services/llm/ for the actual implementation.
 from app.services.llm import LLMService
 
 # Re-export guide parsing functionality
-from app.services.llm import parse_guide_to_json
+from app.services.llm.guide_parser import parse_guide_to_json
 
 # Re-export phase-specific handlers
 from app.services.llm import (

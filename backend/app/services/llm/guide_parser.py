@@ -99,56 +99,60 @@ async def _extract_full_guide(llm_service: LLMService, guide_text: str) -> Dict[
     """
     # Create a system prompt that emphasizes completeness and detailed extraction
     system_prompt = """
-    You are an expert at extracting structured information from academic report guides.
-    Your task is to convert the provided text into a consistent JSON format that captures
-    ALL content from the original guide, including ALL requirements and instructions.
-    
-    You MUST maintain the original structure with chapters and sections.
-    Ensure you capture ALL requirements for each section - completeness is critical.
-    Preserve original numbering, but convert to a nested structure.
-    """
-    
-    # Create the user prompt with expected output format
-    user_prompt = f"""
-    Please extract the structure of this report guide and convert it to JSON:
-    
-    {guide_text}
-    
-    The output should be valid JSON with this structure:
-    {{
-        "title": "The guide title",
-        "description": "Overall guide description",
-        "chapters": [
+        You are a specialized extraction system that converts thesis/report guide text into structured JSON.
+        Follow these rules exactly:
+        1. Output ONLY valid JSON - no other text before or after
+        2. Follow the exact schema provided
+        3. Include EVERY SINGLE section and subsection from the text - do NOT skip any
+        4. Include COMPLETE and DETAILED requirements for each section
+        5. Do not add any additional fields not in the schema
+        6. Escape any special characters in text fields
+        
+        Your TWO primary objectives with EQUAL importance:
+        - COMPLETENESS: Include ALL chapters and sections from the guide
+        - DETAIL: Capture the FULL requirements for each section
+        
+        Convert this thesis/report guide into structured JSON following this schema:
+        
+        {{
+          "title": "GUIDE_TITLE",
+          "chapters": [
             {{
-                "title": "Chapter 1 title",
-                "description": "Chapter description",
-                "sections": [
-                    {{
-                        "title": "Section 1.1 title",
-                        "description": "Section description",
-                        "requirements": [
-                            "Requirement 1",
-                            "Requirement 2"
-                        ]
-                    }}
-                ]
+              "title": "CHAPTER_TITLE",
+              "sections": [
+                {{
+                  "title": "SECTION_TITLE",
+                  "requirements": "FULL_SECTION_REQUIREMENTS",
+                  "id": "CHAPTER_NUMBER.SECTION_NUMBER"
+                }}
+              ]
             }}
-        ]
-    }}
+          ]
+        }}
+        
+        Follow the schema exactly and make sure all information is properly nested.
+        Guidelines:
+        1. DO NOT SKIP ANY CONTENT - include ALL sections and their COMPLETE requirements
+        2. Keep section numbers (like "1.1", "3.3.2") in the titles
+        3. If the document uses different terminology (like "Parts" or "Units"), map them to "chapters" and "sections" in the output
+        4. Preserve ALL requirement details including bullet points, numbered lists, and specific instructions
+        5. If there are multiple sections with the same title but different chapter contexts, include them all
+        
+        """
     
-    IMPORTANT:
-    1. Include ALL content from the original guide
-    2. Preserve ALL requirements and guidance for each section
-    3. Ensure the JSON is valid and properly formatted
-    4. Maintain the original structure (chapters, sections, etc.)
-    5. Start your response with the JSON object directly
-    """
+  
+    # Create user prompt with the guide text to satisfy Anthropic API requirements
+    user_prompt = f"""Extract ALL chapters and sections from this thesis/report guide using the specified schema. Process the ENTIRE document:
+
+{guide_text}
+
+Ensure you extract EVERY chapter and section, not just the first few. Double-check that nothing is missing."""
     
     # Call the LLM API with increased token limit to ensure completeness
     response = await llm_service._call_anthropic_api(
         prompt=user_prompt,
         system=system_prompt,
-        max_tokens=8000,  # Increased from 6000 to ensure we get complete extraction
+        max_tokens=8000,  # Significantly increased to ensure complete extraction of large documents
         temperature=0.2   # Low temperature for more deterministic output
     )
     

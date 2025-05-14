@@ -90,24 +90,25 @@ class LLMService:
     
     async def _call_anthropic_api(self, prompt, system=None, max_tokens=1000, temperature=0.7):
         """
-        Unified method to call Anthropic API that handles different model formats.
+    Unified method to call Anthropic API that handles different model formats.
+    
+    This method dynamically chooses between messages API and completions API
+    based on the model being used.
+    
+    Args:
+        prompt: The user prompt (optional if content is provided directly)
+        system: Optional system prompt
+        max_tokens: Maximum tokens to generate
+        temperature: Controls randomness
+        content: Optional direct content to use instead of prompt
         
-        This method dynamically chooses between messages API and completions API
-        based on the model being used.
-        
-        Args:
-            prompt: The user prompt
-            system: Optional system prompt
-            max_tokens: Maximum tokens to generate
-            temperature: Controls randomness
-            
-        Returns:
-            Generated text content
-        """
+    Returns:
+        Generated text content
+    """
         client = self.get_client()
         
         try:
-            # The newer Claude API use the messages endpoint
+            # Call the Claude API using the messages endpoint (correct for all Claude 3.x models)
             message = client.messages.create(
                 model=self.model,
                 max_tokens=max_tokens,
