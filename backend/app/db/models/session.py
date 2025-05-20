@@ -12,11 +12,12 @@ class Session(Base):
     Session model for storing guide information and intake data.
     
     This model represents a user session for report generation.
-    It stores the parsed guide JSON, intake responses, and session expiration.
+    It stores the parsed guide JSON, intake responses, orchestrator state, and session creation time.
     """
     session_id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     guide_json = Column(JSON, nullable=False)
     intake_json = Column(JSON, nullable=False, default="{}")
     intake_done = Column(Boolean, default=False)
+    state_json = Column(JSON, nullable=True, default=None)
     created_at = Column(DateTime, default=func.now())
     # No expiration to prevent data loss

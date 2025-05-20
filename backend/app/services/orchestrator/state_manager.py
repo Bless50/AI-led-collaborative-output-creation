@@ -1,63 +1,52 @@
 """
 State management for the Orchestrator service.
 
-This module contains functions for persisting orchestrator state to mem0
-and retrieving it. Using mem0 allows us to maintain state between API calls
-without relying on additional database tables.
+This module provides an interface for persisting orchestrator state.
+It delegates the actual database operations to the state_db module to avoid
+circular imports while maintaining a clean API for other orchestrator components.
 """
-import json
 from typing import Optional
+from contextlib import contextmanager
 
-from app.services.memory_service import MemoryService
+from app.db.session import SessionLocal
+from app.services.state_db import save_state_to_db, load_state_from_db
 # Import OrchestratorState using relative import to avoid circular imports
 from app.services.orchestrator.models import OrchestratorState
 
 
 def save_orchestrator_state(state: OrchestratorState) -> None:
     """
-    Save orchestrator state to memory.
+    Save orchestrator state to the database.
     
-    We store the orchestrator state in mem0 with a special category to distinguish
-    it from regular conversation messages. This allows us to maintain state
-    between requests without using a separate database table.
+    This function converts the OrchestratorState object to a dictionary and
+    delegates the actual database operation to the state_db module.
     
     Args:
         state: OrchestratorState to save
     """
     try:
-        # Initialize memory service if not already in state
-        if not hasattr(state, 'memory_service'):
-            state.memory_service = MemoryService()
-        
-        # Convert state to dictionary
-        state_dict = state.to_dict()
-        
-        # Save state to mem0
-        # Use messages format as required by mem0 API
-        state.memory_service.client.add(
-            messages=[{
-                "role": "system",
-                "content": json.dumps(state_dict)
-            }],
-            user_id=state.session_id,
-            categories=["orchestrator_state"]
-        )
-        
-        # Debug log
-        print(f"State saved: phase={state.phase}, section={state.current_section_id}")
+        # Open a database session
+        with get_db() as db:
+            # Convert state to dictionary and save to database
+            state_dict = state.to_dict()
+            success = save_state_to_db(db, state.session_id, state_dict)
+            
+            # Debug log
+            if success:
+                print(f"State saved to database: phase={state.phase}, section={state.current_section_id}")
+            else:
+                print(f"Failed to save state to database for session {state.session_id}")
     except Exception as e:
         # Log error but continue execution
         print(f"Error saving orchestrator state: {e}")
-        pass
 
 
 def load_orchestrator_state(session_id: str) -> Optional[OrchestratorState]:
     """
-    Load orchestrator state from memory.
+    Load orchestrator state from the database.
     
-    We store the orchestrator state in mem0 with a special tag to distinguish
-    it from regular conversation messages. This allows us to maintain state
-    between requests without using a separate database table.
+    This function retrieves the state dictionary from the database via the
+    state_db module and converts it to an OrchestratorState object if found.
     
     Args:
         session_id: Session ID
@@ -66,44 +55,28 @@ def load_orchestrator_state(session_id: str) -> Optional[OrchestratorState]:
         OrchestratorState if found, None otherwise
     """
     try:
-        # Initialize memory service
-        memory_service = MemoryService()
-        
-        # Get all memories directly using the user_id without filtering
-        # We'll manually look for the orchestrator state tag
-        try:
-            # Print the results for debugging
-            print("Fetching orchestrator state from mem0...")
-            results = memory_service.client.get_all(
-                user_id=session_id
-            )
-            print(f"Results type: {type(results)}, data: {results[:100] if isinstance(results, list) else results}")
+        # Open a database session
+        with get_db() as db:
+            # Load state dictionary from database
+            state_dict = load_state_from_db(db, session_id)
             
-            # If we get a valid list of results, try to find orchestrator state
-            if results and isinstance(results, list):
-                for entry in results:
-                    if isinstance(entry, dict):
-                        # For dictionary entries, look for orchestrator_state in categories
-                        categories = entry.get("categories", [])
-                        if isinstance(categories, list) and "orchestrator_state" in categories:
-                            try:
-                                state_data = entry.get("content", "{}")
-                                state_dict = json.loads(state_data)
-                                
-                                # Create and return state object
-                                state = OrchestratorState.from_dict(state_dict)
-                                print(f"State loaded: phase={state.phase}, section={state.current_section_id}")
-                                return state
-                            except (json.JSONDecodeError, AttributeError) as e:
-                                print(f"Error parsing state data: {e}")
-                                continue
-        except Exception as e:
-            print(f"Error retrieving memories: {e}")
-            pass
+            # If state was found, convert to OrchestratorState object and return
+            if state_dict:
+                state = OrchestratorState.from_dict(state_dict)
+                print(f"State loaded from database: phase={state.phase}, section={state.current_section_id}")
+                return state
     except Exception as e:
-        print(f"Error loading orchestrator state: {e}")
-        # Silently fail and create a new state
-        pass
+        print(f"Error loading orchestrator state from database: {e}")
     
-    print("No state found, creating new state")
+    print(f"No state found for session {session_id}, creating new state")
     return None
+
+
+@contextmanager
+def get_db():
+    """Database session context manager."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

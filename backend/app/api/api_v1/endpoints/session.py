@@ -6,14 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.session import SessionCreate, SessionState, IntakeResponse
+from app.schemas.session import SessionCreate, SessionState
 from app.services.llm_service import LLMService
 from app.services.llm.guide_parser import parse_guide_to_json
 from app.services.session_service import (
     create_session,
     get_session_by_id,
     get_session_state,
-    update_intake_response,
+    store_intake_field,
 )
 
 router = APIRouter()
@@ -124,45 +124,6 @@ def get_session_current_state(
     return get_session_state(db=db, session=session)
 
 
-@router.post("/{session_id}/intake-response", response_model=Dict[str, bool])
-def update_session_intake(
-    session_id: str,
-    intake_data: IntakeResponse,
-    db: Session = Depends(get_db)
-) -> Dict[str, bool]:
-    """
-    Update intake response for a session.
-    
-    This endpoint updates a field in the session's intake_json and
-    checks if all required intake fields are now complete.
-    
-    Args:
-        session_id: The session ID
-        intake_data: The intake field and value to update
-        db: Database session
-        
-    Returns:
-        Dictionary with intake_done status
-        
-    Raises:
-        HTTPException: If the session is not found
-    """
-    session = get_session_by_id(db=db, session_id=session_id)
-    if not session:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Session with ID {session_id} not found"
-        )
-    
-    intake_done = update_intake_response(
-        db=db,
-        session=session,
-        field=intake_data.field,
-        value=intake_data.value
-    )
-    
-    return {"intake_done": intake_done}
-
 
 def extract_text_from_file(content: bytes) -> bytes:
     """
@@ -189,8 +150,6 @@ def extract_text_from_file(content: bytes) -> bytes:
             
             text = "\n".join(paragraphs)
             print(f"Extracted {len(text)} characters from DOCX")
-            #print the extracted text
-            print(text)
             return text.encode('utf-8')
         except Exception as e:
             print(f"Error extracting text from DOCX: {str(e)}")

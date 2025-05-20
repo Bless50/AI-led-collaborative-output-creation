@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.models.session import Session as SessionModel
 from app.db.models.section import Section as SectionModel
 from app.schemas.session import SessionCreate, SessionState
+# Note: We no longer import from orchestrator to break circular dependency
 
 
 def create_session(db: Session, session_data: SessionCreate) -> SessionModel:
@@ -91,17 +92,17 @@ def get_session_state(db: Session, session: SessionModel) -> SessionState:
     )
 
 
-def update_intake_response(
+def store_intake_field(
     db: Session,
     session: SessionModel,
     field: str,
     value: Any
 ) -> bool:
     """
-    Update an intake response field.
+    Store a field from the intake conversation.
     
-    This function updates a field in the session's intake_json and
-    checks if all required intake fields are now complete.
+    This function stores a report requirement field in the session's intake_json
+    and checks if all required intake fields are now complete.
     
     Args:
         db: Database session
@@ -117,20 +118,13 @@ def update_intake_response(
     intake_json[field] = value
     session.intake_json = intake_json
     
-    # Check if all required fields are present
-    required_fields = [
-        "title",
-        "department",
-        "objectives",
-        "problem_statement",
-        "sample_size"
-    ]
+    # We no longer check for predefined required fields
+    # The intake completion is controlled by Claude's decisions
+    # The intake_done flag is now just an informational field
+    # that will be set by the orchestrator service when it decides
+    # to move to the next phase
     
-    all_fields_present = all(field in intake_json for field in required_fields)
-    
-    # Update intake_done if all fields are present
-    if all_fields_present and not session.intake_done:
-        session.intake_done = True
+    # For now we don't modify the intake_done flag here
     
     # Commit changes
     db.commit()
@@ -149,16 +143,26 @@ def _initialize_sections(db: Session, session: SessionModel) -> None:
         db: Database session
         session: Session model
     """
-    guide_json = session.guide_json
-    
-    # Create section records for each chapter and section
-    for chapter_idx, chapter in enumerate(guide_json.get("chapters", [])):
-        for section_idx, _ in enumerate(chapter.get("sections", [])):
-            section = SectionModel(
-                session_id=session.session_id,
-                chapter_idx=chapter_idx,
-                section_idx=section_idx,
-                status="pending"
-            )
-            db.add(section)
- 
+    try:
+        # Get chapters from guide
+        guide_json = session.guide_json
+        chapters = guide_json.get("chapters", [])
+        
+        # Create section records for each section in the guide
+        for chapter_idx, chapter in enumerate(chapters):
+            sections = chapter.get("sections", [])
+            for section_idx, section in enumerate(sections):
+                db_section = SectionModel(
+                    session_id=session.session_id,
+                    chapter_idx=chapter_idx,
+                    section_idx=section_idx,
+                    title=section.get("title", ""),
+                    content="",  # Initially empty
+                    status="pending"  # Start as pending
+                )
+                db.add(db_section)
+    except Exception as e:
+        print(f"Error initializing sections: {str(e)}")
+
+
+# Orchestrator state functions have been moved to state_db.py to avoid circular imports

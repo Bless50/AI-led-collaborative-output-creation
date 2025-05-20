@@ -64,7 +64,7 @@ class MemoryService:
         # According to the mem0 guide, we should use the messages parameter
         self.client.add(messages=[system_message], user_id=session_id)
     
-    def add_message(self, session_id: str, role: str, content: str) -> None:
+    def add_message(self, session_id: str, role: str, content: str, categories=None) -> None:
         """
         Add a message to memory.
         
@@ -74,16 +74,28 @@ class MemoryService:
             session_id: The session identifier
             role: The role of the message sender (user or assistant)
             content: The message content
+            categories: Optional list of categories to tag this message with
         """
         # According to the mem0 guide, we should structure our data differently
         # We'll use a message object with role and content
         message = {"role": role, "content": content}
         
-        # Then add it to mem0 properly
-        self.client.add(
-            messages=[message],
-            user_id=session_id
-        )
+        # Create add parameters
+        add_params = {
+            "messages": [message],
+            "user_id": session_id
+        }
+        
+        # Add metadata if categories are provided
+        if categories:
+            add_params["metadata"] = {"categories": categories}
+        
+        # Add to mem0
+        try:
+            self.client.add(**add_params)
+        except Exception as e:
+            print(f"Error adding message to memory: {str(e)}")
+            # Continue execution even if memory storage fails
         
     def add_user_message(self, session_id: str, content: str) -> None:
         """
@@ -131,6 +143,34 @@ class MemoryService:
         else:
             # Get all conversation history
             return self.client.get_all(version="v2", filters=filters, page=1, page_size=100)
+    
+    def get_intake_context(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        Get context for the Intake phase.
+        
+        This retrieves messages categorized as intake-related for the given session.
+        
+        Args:
+            session_id: The session identifier
+            
+        Returns:
+            List of intake-related messages
+        """
+        # For now, just get all messages for this session
+        # We'll implement more sophisticated filtering once we understand
+        # how categories are stored in mem0
+        
+        # The mem0 API expects filters in a specific format
+        filters = {
+            "user_id": session_id
+        }
+        
+        # Get all conversation history for this session
+        try:
+            return self.client.get_all(version="v2", filters=filters, page=1, page_size=100)
+        except Exception as e:
+            print(f"Error getting intake context: {str(e)}")
+            return []
     
     def get_planner_context(self, session_id: str, current_section: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """

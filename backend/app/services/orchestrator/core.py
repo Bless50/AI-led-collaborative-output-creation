@@ -10,9 +10,9 @@ from typing import Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 
 from app.db.models.session import Session as SessionModel
-from app.services.session_service import get_session_by_id, update_intake_response
+from app.services.session_service import get_session_by_id, store_intake_field
 from app.services.orchestrator.models import Phase, OrchestratorState
-from app.services.orchestrator.state_manager import save_orchestrator_state, load_orchestrator_state
+from app.services.state_db import save_state_to_db, load_state_from_db
 from app.services.orchestrator.utils import extract_section_from_guide, determine_intake_field
 
 # Import phase handlers - will be moved to separate modules
@@ -63,9 +63,10 @@ async def process_chat_message(
     # Special command handling
     if message.strip().lower() == "force-complete-intake":
         # Special command for testing to force completion of the intake phase
-        state = load_orchestrator_state(session_id) or OrchestratorState(session_id)
+        state_dict = load_state_from_db(db, session_id)
+        state = OrchestratorState.from_dict(state_dict) if state_dict else OrchestratorState(session_id)
         state.phase = Phase.PLANNING
-        save_orchestrator_state(state)
+        save_state_to_db(db, session_id, state.to_dict())
         return {
             "message": "Intake phase forced to complete. Transitioning to planning phase.",
             "metadata": {
@@ -74,9 +75,13 @@ async def process_chat_message(
             }
         }
         
-    # Load state from mem0 or create new state
-    state = load_orchestrator_state(session_id)
-    if not state:
+    # Load state from database or create new state
+    state_dict = load_state_from_db(db, session_id)
+    
+    # Create state object from dictionary or create new state if not found
+    if state_dict:
+        state = OrchestratorState.from_dict(state_dict)
+    else:
         # Create new state in intake phase
         state = OrchestratorState(session_id)
         
@@ -108,8 +113,8 @@ async def process_chat_message(
         
     # Make sure we have a valid state to save
     if updated_state:
-        # Save updated state to mem0
-        save_orchestrator_state(updated_state)
+        # Save updated state to database
+        save_state_to_db(db, session_id, updated_state.to_dict())
         
     return response
 
